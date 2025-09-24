@@ -10,7 +10,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +18,7 @@ import {
   Loader2,
   Trash2,
   Edit,
+  BarChart2
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -60,6 +60,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Separator } from '@/components/ui/separator';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
+    Tooltip
+} from "recharts"
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+
 
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required.'),
@@ -108,6 +119,16 @@ export default function SummaryDetailPage() {
     isLoading: areInsightsLoading,
     error: insightsError,
   } = useCollection(insightsRef);
+
+  const chartData = React.useMemo(() => {
+    if (!insights) return [];
+    return insights.map((insight, index) => ({
+      name: `Insight ${index + 1}`,
+      relevance: insight.relevanceScore,
+      content: insight.content
+    }));
+  }, [insights]);
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -190,7 +211,8 @@ export default function SummaryDetailPage() {
   }
 
   return (
-    <Card>
+    <div className="grid gap-6 lg:grid-cols-2">
+    <Card className="lg:col-span-1">
       <CardHeader>
         <div className="flex justify-between items-start">
           <div>
@@ -301,17 +323,75 @@ export default function SummaryDetailPage() {
           {areInsightsLoading ? (
             <p>Loading insights...</p>
           ) : insights && insights.length > 0 ? (
-            <div
-              className="prose prose-sm max-w-none text-muted-foreground"
-              dangerouslySetInnerHTML={{
-                __html: insights[0].content.replace(/\n/g, '<br />'),
-              }}
-            />
+             <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
+                {insights.map((insight) => (
+                  <li key={insight.id}>
+                    {insight.content} (Relevance: {insight.relevanceScore})
+                  </li>
+                ))}
+              </ul>
           ) : (
             <p className="text-muted-foreground">No insights found.</p>
           )}
         </div>
       </CardContent>
     </Card>
+     <Card className="lg:col-span-1">
+        <CardHeader>
+          <div className="flex items-center gap-2 text-lg font-semibold">
+              <BarChart2 className="h-5 w-5 text-primary" />
+              <h3>Insight Relevance</h3>
+          </div>
+          <CardDescription>
+            A visual representation of the relevance of each insight.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {areInsightsLoading ? (
+             <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+             </div>
+          ) : chartData.length > 0 ? (
+            <ChartContainer config={{
+                relevance: {
+                    label: "Relevance",
+                    color: "hsl(var(--primary))",
+                },
+            }} className="h-64 w-full">
+              <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: -10 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  tickMargin={10}
+                  axisLine={false}
+                />
+                <YAxis dataKey="relevance" domain={[0, 10]} />
+                <Tooltip
+                  cursor={false}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                           <p className="font-bold">{`${data.name}: ${data.relevance}`}</p>
+                           <p className="text-sm text-muted-foreground max-w-xs">{data.content}</p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Bar dataKey="relevance" fill="var(--color-relevance)" radius={4} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+             <div className="flex h-64 items-center justify-center border-dashed border-2 rounded-md">
+                <p className="text-muted-foreground">No insight data to display.</p>
+             </div>
+          )}
+        </CardContent>
+     </Card>
+    </div>
   );
 }

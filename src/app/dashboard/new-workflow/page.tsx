@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { summarizeDocument } from '@/ai/flows/summarize-document';
-import { generateInsightsFromSummary } from '@/ai/flows/generate-insights-from-summary';
+import { generateInsightsFromSummary, type GenerateInsightsFromSummaryOutput } from '@/ai/flows/generate-insights-from-summary';
 import { Loader2, FileText, Lightbulb } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useUser, useFirestore } from '@/firebase';
@@ -54,7 +54,7 @@ export default function NewWorkflowPage() {
   const firestore = useFirestore();
 
   const [summary, setSummary] = React.useState<string | null>(null);
-  const [insights, setInsights] = React.useState<string | null>(null);
+  const [insights, setInsights] = React.useState<GenerateInsightsFromSummaryOutput['insights'] | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
 
   const form = useForm<FormValues>({
@@ -113,11 +113,13 @@ export default function NewWorkflowPage() {
 
       if (newSummaryDoc) {
         const insightsRef = collection(newSummaryDoc, 'insights');
-        await addDocumentNonBlocking(insightsRef, {
-          content: insightsResult.insights,
-          relevanceScore: 0, // Placeholder
-          summaryId: newSummaryDoc.id,
-        });
+        for (const insight of insightsResult.insights) {
+            await addDocumentNonBlocking(insightsRef, {
+                content: insight.insight,
+                relevanceScore: insight.relevanceScore,
+                summaryId: newSummaryDoc.id,
+            });
+        }
       }
 
       toast({
@@ -242,10 +244,13 @@ export default function NewWorkflowPage() {
                   <Lightbulb className="h-5 w-5 text-primary" />
                   <h3>Key Insights</h3>
                 </div>
-                <div
-                  className="prose prose-sm max-w-none text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: insights.replace(/\n/g, '<br />') }}
-                />
+                <ul className="list-disc pl-5 text-muted-foreground space-y-2">
+                    {insights.map((insight, index) => (
+                        <li key={index}>
+                            {insight.insight} (Relevance: {insight.relevanceScore})
+                        </li>
+                    ))}
+                </ul>
               </div>
             )}
           </CardContent>

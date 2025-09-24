@@ -20,10 +20,21 @@ export type GenerateInsightsFromSummaryInput = z.infer<
   typeof GenerateInsightsFromSummaryInputSchema
 >;
 
+const InsightSchema = z.object({
+  insight: z.string().describe('A single, specific insight.'),
+  relevanceScore: z
+    .number()
+    .min(1)
+    .max(10)
+    .describe(
+      'A score from 1-10 indicating the relevance and importance of the insight.'
+    ),
+});
+
 const GenerateInsightsFromSummaryOutputSchema = z.object({
   insights: z
-    .string()
-    .describe('The key insights generated from the document summary.'),
+    .array(InsightSchema)
+    .describe('An array of key insights generated from the document summary.'),
 });
 export type GenerateInsightsFromSummaryOutput = z.infer<
   typeof GenerateInsightsFromSummaryOutputSchema
@@ -41,11 +52,10 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateInsightsFromSummaryOutputSchema},
   prompt: `You are an expert AI assistant specializing in generating key insights from document summaries.
 
-  Given the following summary, identify the most important and actionable insights.
+  Given the following summary, identify and extract 3 to 5 of the most important and actionable insights. For each insight, provide a relevance score from 1 (least relevant) to 10 (most relevant).
 
   Summary: {{{summary}}}
-
-  Insights:`,
+  `,
 });
 
 const generateInsightsFromSummaryFlow = ai.defineFlow(

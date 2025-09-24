@@ -1,0 +1,100 @@
+/**
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a strict user-ownership model for data access.
+ *
+ * Data Structure:
+ * All data is nested under /users/{userId}, ensuring that each user has a private data tree.
+ * - /users/{userId}: Stores user profile information. Only the user can read/write their own profile.
+ * - /users/{userId}/summaries/{summaryId}: Stores summaries created by the user. Only the user can read/write their own summaries.
+ * - /users/{userId}/summaries/{summaryId}/insights/{insightId}: Stores insights generated from a summary. Only the user can read/write their own insights.
+ *
+ * Key Security Decisions:
+ * - Users can only access their own data, preventing unauthorized access to other users' information.
+ * - Listing of users is explicitly denied to prevent enumeration.
+ * - No public data access is permitted.
+ *
+ * Authorization Independence:
+ * The rules are designed to be independent and avoid hierarchical authorization dependencies.
+ * Each rule checks the user ID in the path against the authenticated user's ID, ensuring that
+ * only the owner of the data can access it.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Enforces strict user-ownership for user profiles.
+     * @path /users/{userId}
+     * @allow (create) User with ID 'user123' can create their profile if authenticated as 'user123'.
+     * @deny (create) User with ID 'user456' cannot create a profile for 'user123' even if authenticated.
+     * @allow (get) User 'user123' can retrieve their own profile if authenticated as 'user123'.
+     * @deny (get) User 'user456' cannot retrieve the profile of 'user123' even if authenticated.
+     * @allow (update) User 'user123' can update their own profile if authenticated as 'user123'.
+     * @deny (update) User 'user456' cannot update the profile of 'user123' even if authenticated.
+     * @allow (delete) User 'user123' can delete their own profile if authenticated as 'user123'.
+     * @deny (delete) User 'user456' cannot delete the profile of 'user123' even if authenticated.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces strict user-ownership for summaries.
+     * @path /users/{userId}/summaries/{summaryId}
+     * @allow (create) User 'user123' can create a summary under their profile if authenticated as 'user123'.
+     * @deny (create) User 'user456' cannot create a summary under 'user123''s profile, even if authenticated.
+     * @allow (get) User 'user123' can retrieve a summary under their profile if authenticated as 'user123'.
+     * @deny (get) User 'user456' cannot retrieve a summary under 'user123''s profile, even if authenticated.
+     * @allow (update) User 'user123' can update a summary under their profile if authenticated as 'user123'.
+     * @deny (update) User 'user456' cannot update a summary under 'user123''s profile, even if authenticated.
+     * @allow (delete) User 'user123' can delete a summary under their profile if authenticated as 'user123'.
+     * @deny (delete) User 'user456' cannot delete a summary under 'user123''s profile, even if authenticated.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/summaries/{summaryId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Enforces strict user-ownership for insights.
+     * @path /users/{userId}/summaries/{summaryId}/insights/{insightId}
+     * @allow (create) User 'user123' can create an insight under their summary if authenticated as 'user123'.
+     * @deny (create) User 'user456' cannot create an insight under 'user123''s summary, even if authenticated.
+     * @allow (get) User 'user123' can retrieve an insight under their summary if authenticated as 'user123'.
+     * @deny (get) User 'user456' cannot retrieve an insight under 'user123''s summary, even if authenticated.
+     * @allow (update) User 'user123' can update an insight under their summary if authenticated as 'user123'.
+     * @deny (update) User 'user456' cannot update an insight under 'user123''s summary, even if authenticated.
+     * @allow (delete) User 'user123' can delete an insight under their summary if authenticated as 'user123'.
+     * @deny (delete) User 'user456' cannot delete an insight under 'user123''s summary, even if authenticated.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/summaries/{summaryId}/insights/{insightId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return isSignedIn() && request.auth.uid == userId;
+  }
+
+  function isExistingOwner(userId) {
+    return isOwner(userId) && resource != null;
+  }
+}

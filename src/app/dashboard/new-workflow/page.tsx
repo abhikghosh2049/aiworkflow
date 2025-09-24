@@ -26,11 +26,21 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { summarizeDocument } from '@/ai/flows/summarize-document';
 import { generateInsightsFromSummary, type GenerateInsightsFromSummaryOutput } from '@/ai/flows/generate-insights-from-summary';
-import { Loader2, FileText, Lightbulb } from 'lucide-react';
+import { Loader2, FileText, Lightbulb, BarChart2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useUser, useFirestore } from '@/firebase';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection } from 'firebase/firestore';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Tooltip
+} from "recharts"
+import { ChartContainer } from '@/components/ui/chart';
+
 
 const formSchema = z.object({
   title: z
@@ -65,6 +75,15 @@ export default function NewWorkflowPage() {
     },
   });
   const fileRef = form.register('document');
+
+    const chartData = React.useMemo(() => {
+        if (!insights) return [];
+        return insights.map((insight, index) => ({
+        name: `Insight ${index + 1}`,
+        relevance: insight.relevanceScore,
+        content: insight.insight
+        }));
+    }, [insights]);
 
   const readFileAsDataURI = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -239,19 +258,67 @@ export default function NewWorkflowPage() {
                 </div>
             )}
             {insights && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-lg font-semibold">
-                  <Lightbulb className="h-5 w-5 text-primary" />
-                  <h3>Key Insights</h3>
+                <>
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-lg font-semibold">
+                    <Lightbulb className="h-5 w-5 text-primary" />
+                    <h3>Key Insights</h3>
+                    </div>
+                    <ul className="list-disc pl-5 text-muted-foreground space-y-2">
+                        {insights.map((insight, index) => (
+                            <li key={index}>
+                                {insight.insight} (Relevance: {insight.relevanceScore})
+                            </li>
+                        ))}
+                    </ul>
                 </div>
-                <ul className="list-disc pl-5 text-muted-foreground space-y-2">
-                    {insights.map((insight, index) => (
-                        <li key={index}>
-                            {insight.insight} (Relevance: {insight.relevanceScore})
-                        </li>
-                    ))}
-                </ul>
-              </div>
+                <Separator />
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-lg font-semibold">
+                        <BarChart2 className="h-5 w-5 text-primary" />
+                        <h3>Insight Relevance</h3>
+                    </div>
+                    {chartData.length > 0 ? (
+                        <ChartContainer config={{
+                            relevance: {
+                                label: "Relevance",
+                                color: "hsl(var(--primary))",
+                            },
+                        }} className="h-64 w-full">
+                          <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: -10 }}>
+                            <CartesianGrid vertical={false} />
+                            <XAxis
+                              dataKey="name"
+                              tickLine={false}
+                              tickMargin={10}
+                              axisLine={false}
+                            />
+                            <YAxis dataKey="relevance" domain={[0, 10]} />
+                            <Tooltip
+                              cursor={false}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                       <p className="font-bold">{`${data.name}: ${data.relevance}`}</p>
+                                       <p className="text-sm text-muted-foreground max-w-xs">{data.content}</p>
+                                    </div>
+                                  )
+                                }
+                                return null
+                              }}
+                            />
+                            <Bar dataKey="relevance" fill="var(--color-relevance)" radius={4} />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                         <div className="flex h-64 items-center justify-center border-dashed border-2 rounded-md">
+                            <p className="text-muted-foreground">No insight data to display.</p>
+                         </div>
+                      )}
+                </div>
+                </>
             )}
           </CardContent>
         </Card>

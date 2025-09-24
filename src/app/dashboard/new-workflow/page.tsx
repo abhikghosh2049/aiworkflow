@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -27,8 +28,15 @@ import { summarizeDocument } from '@/ai/flows/summarize-document';
 import { generateInsightsFromSummary } from '@/ai/flows/generate-insights-from-summary';
 import { Loader2, FileText, Lightbulb } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { useUser, useFirestore } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection } from 'firebase/firestore';
 
 const formSchema = z.object({
+  title: z
+    .string()
+    .min(3, 'Title must be at least 3 characters.')
+    .max(100, 'Title must be less than 100 characters.'),
   document: z
     .instanceof(FileList)
     .refine((files) => files?.length === 1, 'A document is required.')
@@ -42,6 +50,9 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function NewWorkflowPage() {
   const { toast } = useToast();
+  const { user } = useUser();
+  const firestore = useFirestore();
+
   const [summary, setSummary] = React.useState<string | null>(null);
   const [insights, setInsights] = React.useState<string | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -49,6 +60,7 @@ export default function NewWorkflowPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      title: '',
       document: undefined,
     },
   });
@@ -65,7 +77,7 @@ export default function NewWorkflowPage() {
 
   const onSubmit = async (data: FormValues) => {
     const file = data.document[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     setIsProcessing(true);
     setSummary(null);
@@ -87,11 +99,36 @@ export default function NewWorkflowPage() {
         summary: summaryResult.summary,
       });
       setInsights(insightsResult.insights);
-      toast({
-        title: 'Insights Generated',
-        description:
-          'Key insights have been successfully extracted from the summary.',
+
+      // Step 3: Save to Firestore
+      const summariesRef = collection(firestore, 'users', user.uid, 'summaries');
+      const now = new Date().toISOString();
+      const newSummaryDoc = await addDocumentNonBlocking(summariesRef, {
+        userId: user.uid,
+        title: data.title,
+        content: summaryResult.summary,
+        createdAt: now,
+        modifiedAt: now,
       });
+
+      if (newSummaryDoc) {
+        const insightsRef = collection(newSummaryDoc, 'insights');
+        await addDocumentNonBlocking(insightsRef, {
+          content: insightsResult.insights,
+          relevanceScore: 0, // Placeholder
+          summaryId: newSummaryDoc.id,
+        });
+      }
+
+      toast({
+        title: 'Workflow Complete',
+        description:
+          'Summary and insights have been generated and saved to your history.',
+      });
+
+      // Reset form
+      form.reset();
+
     } catch (error) {
       console.error(error);
       const errorMessage =
@@ -120,6 +157,25 @@ export default function NewWorkflowPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., Q3 Financial Report"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Give your workflow a title to easily identify it later.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="document"
                 render={({ field }) => (
                   <FormItem>
@@ -138,7 +194,7 @@ export default function NewWorkflowPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={isProcessing}>
+              <Button type="submit" disabled={isProcessing || !user}>
                 {isProcessing && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
@@ -149,25 +205,37 @@ export default function NewWorkflowPage() {
         </CardContent>
       </Card>
 
-      {(summary || insights) && (
+      {(isProcessing || summary || insights) && (
         <Card>
           <CardHeader>
             <CardTitle>Workflow Results</CardTitle>
             <CardDescription>
-              Review the generated summary and insights below.
+              Review the generated summary and insights below. Results are automatically saved.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+             {isProcessing && !summary && (
+                <div className="flex items-center gap-2 text-lg font-semibold">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <h3>Generating Summary...</h3>
+                </div>
+            )}
             {summary && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-lg font-semibold">
                   <FileText className="h-5 w-5 text-primary" />
                   <h3>Summary</h3>
                 </div>
-                <p className="text-muted-foreground">{summary}</p>
+                <p className="text-muted-foreground whitespace-pre-wrap">{summary}</p>
               </div>
             )}
-            {summary && insights && <Separator />}
+            {summary && <Separator />}
+             {isProcessing && summary && !insights && (
+                <div className="flex items-center gap-2 text-lg font-semibold">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <h3>Generating Insights...</h3>
+                </div>
+            )}
             {insights && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-lg font-semibold">

@@ -30,7 +30,9 @@ export function Hero() {
         </p>
 
         <div className="space-y-4 md:space-y-0 md:space-x-4">
-          <Button className="w-full md:w-1/3 text-lg">Get Started</Button>
+          <Button asChild className="w-full md:w-1/3 text-lg">
+            <Link href="/login">Get Started</Link>
+          </Button>
           <Button
             asChild
             variant="outline"

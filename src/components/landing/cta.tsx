@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from 'next/link';
 
 export function Cta() {
   return (
@@ -14,7 +15,9 @@ export function Cta() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="text-lg bg-primary-foreground text-primary hover:bg-primary-foreground/90" size="lg">Start Your Free Trial</Button>
+          <Button asChild className="text-lg bg-primary-foreground text-primary hover:bg-primary-foreground/90" size="lg">
+            <Link href="/login">Start Your Free Trial</Link>
+          </Button>
         </CardContent>
       </Card>
     </section>

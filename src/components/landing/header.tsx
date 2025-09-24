@@ -36,10 +36,10 @@ export function Header() {
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2 md:space-x-4">
           <Button variant="ghost" asChild>
-            <Link href="/dashboard">Sign In</Link>
+            <Link href="/login">Sign In</Link>
           </Button>
           <Button asChild>
-            <Link href="/dashboard">Get Started</Link>
+            <Link href="/login">Get Started</Link>
           </Button>
         
           <Sheet>
@@ -64,7 +64,7 @@ export function Header() {
                     {link.label}
                   </Link>
                 ))}
-                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
+                <Link href="/login" className="text-muted-foreground hover:text-foreground">
                   Sign In
                 </Link>
               </div>
